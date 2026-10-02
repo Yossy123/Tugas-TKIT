@@ -111,6 +111,20 @@ test('quiz supports all requested counts and strips code fences and extra fields
   }
 });
 
+test('document notes use the entire chunk with a bounded factual-notes prompt', async (t) => {
+  const upstream = mockGroq(t, 'Catatan padat dari seluruh bagian.');
+  const chunk = 'Materi lengkap. '.repeat(700) + 'PENANDA_AKHIR';
+  const response = await request({ type: 'summary', task: 'document-notes', content: chunk });
+  assert.equal(response.statusCode, 200);
+  const payload = JSON.parse(upstream.mock.calls[0].arguments[1].body);
+  assert.match(payload.messages[1].content, /SELURUH bagian/);
+  assert.ok(payload.messages[1].content.endsWith(chunk));
+  assert.equal(payload.reasoning_effort, 'low');
+  assert.equal(payload.max_completion_tokens, 1600);
+  assert.equal((await request({ type: 'quiz', task: 'document-notes', content: material })).statusCode, 422);
+  assert.equal((await request({ type: 'summary', task: 'unknown', content: material })).statusCode, 422);
+});
+
 test('flashcards return trimmed text at the requested count', async (t) => {
   mockGroq(t, JSON.stringify({ cards: cards(10) }));
   const response = await request({ type: 'flashcard', content: material, settings: { count: 10 } });

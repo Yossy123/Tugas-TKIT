@@ -36,6 +36,13 @@ textarea:focus { border-color:var(--green); background:#fff; }
 .pdf-upload:has(input:disabled) .pdf-upload-button { cursor:wait; opacity:.6; }
 .pdf-status { color:var(--muted); font-size:.75rem; line-height:1.5; }
 .pdf-status.is-warning { color:var(--danger); }
+.pdf-attachment { display:flex; align-items:center; gap:12px; padding:15px; margin:0 0 24px; border:1px solid var(--green); border-radius:3px; background:var(--green-soft); }
+.pdf-attachment[hidden],#text-material[hidden],.counter[hidden] { display:none; }
+.pdf-attachment-copy { flex:1; min-width:0; overflow-wrap:anywhere; }
+.pdf-attachment-copy strong,.pdf-attachment-copy span { display:block; }
+.pdf-attachment-copy strong { font-size:.87rem; }
+.pdf-attachment-copy span { margin-top:5px; color:var(--muted); font-size:.75rem; line-height:1.5; }
+.pdf-attachment .action-button { flex-shrink:0; }
 .helper-text { margin:10px 0 31px; color:var(--muted); font-size:.78rem; line-height:1.5; }
 .generation-options { min-width:0; margin:0 0 30px; padding:0; border:0; }
 .generation-options legend { display:flex; align-items:center; gap:11px; width:100%; margin-bottom:15px; font-size:.9rem; font-weight:650; }

@@ -16,18 +16,26 @@ const questions = (count) => Array.from({ length: count }, (_, i) => ({
   answer: 'A', explanation: 'Materi menyebutkan cahaya matahari sebagai sumber energi.',
 }));
 const cards = (count) => Array.from({ length: count }, (_, i) => ({ front: `Konsep ${i + 1}?`, back: `Penjelasan konsep ${i + 1}.` }));
-const samplePdf = () => {
-  const stream = 'BT /F1 12 Tf 50 700 Td (Plants use sunlight and water to produce glucose and oxygen during photosynthesis.) Tj ET';
+const samplePdf = (pageCount = 1, empty = false) => {
+  const fontId = 3 + pageCount * 2;
   const objects = [
-    '<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
-    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Kids [${Array.from({ length: pageCount }, (_, i) => `${3 + i * 2} 0 R`).join(' ')}] /Count ${pageCount} >>`,
   ];
+  for (let page = 0; page < pageCount; page++) {
+    const text = 'Plants use sunlight and water to produce glucose and oxygen during photosynthesis.';
+    const lines = empty ? [] : Array.from({ length: pageCount > 1 ? 40 : 1 }, (_, i) => `${text} Page ${page + 1} detail ${i + 1}.`);
+    if (!empty) lines.push(`LAST_PAGE_MARKER_${page + 1}`);
+    const stream = `BT /F1 9 Tf 30 740 Td 14 TL ${lines.map((line, i) => `${i ? 'T* ' : ''}(${line}) Tj`).join('\n')} ET`;
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${4 + page * 2} 0 R >>`,
+      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+  }
+  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
   let pdf = '%PDF-1.4\n';
   const offsets = [0];
   objects.forEach((object, i) => { offsets.push(Buffer.byteLength(pdf)); pdf += `${i + 1} 0 obj\n${object}\nendobj\n`; });
   const xref = Buffer.byteLength(pdf);
-  pdf += `xref\n0 6\n0000000000 65535 f \n${offsets.slice(1).map((n) => `${String(n).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.slice(1).map((n) => `${String(n).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
   return Buffer.from(pdf);
 };
 
@@ -90,9 +98,58 @@ const samplePdf = () => {
     assert.equal(requests.length, 0);
 
     await page.locator('#pdf-file').setInputFiles({ name: 'sample.pdf', mimeType: 'application/pdf', buffer: samplePdf() });
-    await page.waitForFunction(() => document.getElementById('pdf-status').textContent.includes('sudah masuk'));
-    assert.match(await page.locator('#study-content').inputValue(), /photosynthesis/);
-    console.log('PASS: existing PDF import still works');
+    await page.waitForFunction(() => document.getElementById('pdf-status').textContent.includes('PDF siap dipakai'));
+    assert.equal(await page.locator('#study-content').inputValue(), '');
+    assert.equal(await page.locator('#text-material').isVisible(), false);
+    assert.equal(await page.locator('#pdf-name').innerText(), 'sample.pdf');
+    await page.locator('#generate-button').click();
+    await page.waitForFunction(() => !document.getElementById('generate-button').disabled);
+    assert.match(requests.at(-1).content, /photosynthesis/);
+    assert.equal(requests.at(-1).task, undefined);
+    await page.locator('#remove-pdf').click();
+    assert.equal(await page.locator('#text-material').isVisible(), true);
+
+    await page.locator('#study-content').fill('Materi ketik yang tetap tersimpan ketika PDF dilampirkan.');
+    await page.locator('#pdf-file').setInputFiles({ name: 'long.pdf', mimeType: 'application/pdf', buffer: samplePdf(8) });
+    await page.waitForFunction(() => document.getElementById('pdf-status').textContent.includes('PDF siap dipakai'));
+    assert.match(await page.locator('#pdf-details').innerText(), /8 halaman/);
+    await page.setViewportSize({ width: 375, height: 812 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'PDF attachment must fit mobile viewport');
+    await page.screenshot({ path: path.join(root, '.tmp', 'studygen-pdf-mobile.png'), fullPage: true });
+    await page.setViewportSize({ width: 1365, height: 900 });
+    const beforePdfRequests = requests.length;
+    await page.locator('#generate-button').click();
+    await page.waitForFunction(() => !document.getElementById('generate-button').disabled);
+    const notesRequests = requests.slice(beforePdfRequests).filter((input) => input.task === 'document-notes');
+    assert.ok(notesRequests.length > 1);
+    assert.ok(notesRequests.every((input) => input.content.length <= 15000));
+    assert.ok(notesRequests.at(-1).content.includes('LAST_PAGE_MARKER_8'));
+    assert.ok(notesRequests.map((input) => input.content).join('').length > 15000);
+    assert.equal(requests.at(-1).type, 'summary');
+    const notesRequestCount = requests.filter((input) => input.task === 'document-notes').length;
+    for (const type of ['quiz', 'flashcard']) {
+      await page.locator(`label.type-option:has(input[value="${type}"])`).click();
+      await page.locator('#item-count').selectOption('10');
+      await page.locator('#generate-button').click();
+      await page.waitForFunction(() => !document.getElementById('generate-button').disabled);
+      assert.equal(requests.at(-1).type, type);
+    }
+    assert.equal(requests.filter((input) => input.task === 'document-notes').length, notesRequestCount);
+    const pdfRecord = await page.evaluate((storageKey) => JSON.parse(localStorage.getItem(storageKey))[0], key);
+    assert.deepEqual(pdfRecord.source, { type: 'pdf', name: 'long.pdf', pages: 8 });
+    await page.locator('#remove-pdf').click();
+    assert.equal(await page.locator('#study-content').inputValue(), 'Materi ketik yang tetap tersimpan ketika PDF dilampirkan.');
+    await page.reload();
+    await page.getByRole('button', { name: 'Buka long, Flashcard', exact: true }).click();
+    assert.equal(await page.locator('#study-content').inputValue(), '');
+    assert.match(await page.locator('#pdf-status').innerText(), /Pilih ulang PDF/);
+    assert.equal(await page.getByRole('button', { name: 'Buka jawaban', exact: true }).count(), 1);
+    await page.locator('#pdf-file').setInputFiles({ name: 'scanned.pdf', mimeType: 'application/pdf', buffer: samplePdf(1, true) });
+    await page.waitForFunction(() => document.getElementById('pdf-status').textContent.includes('perlu OCR'));
+    assert.equal(await page.locator('#pdf-attachment').isVisible(), false);
+    await page.evaluate((storageKey) => localStorage.removeItem(storageKey), key);
+    await page.reload();
+    console.log('PASS: PDF attachments stay out of textarea; all long-PDF pages reach AI; cached notes and PDF history work; scans report OCR requirement');
 
     const generate = async (type, count = 5, title = type) => {
       await page.locator('#study-content').fill(material);

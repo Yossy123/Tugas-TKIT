@@ -33,6 +33,8 @@ module.exports = async function handler(req, res) {
   if (!isObject(input)) return fail(400, 'Request tidak valid.');
   const content = typeof input.content === 'string' ? input.content.trim() : '';
   const type = input.type;
+  const task = input.task ?? 'generate';
+  if (!['generate', 'document-notes'].includes(task) || (task === 'document-notes' && type !== 'summary')) return fail(422, 'Jenis proses dokumen tidak valid.');
   if (!content) return fail(422, 'Materi tidak boleh kosong.');
   if (!['summary', 'quiz', 'flashcard'].includes(type)) return fail(422, 'Jenis generate tidak valid.');
   if (textLength(content) < 20) return fail(422, 'Materi terlalu pendek. Masukkan minimal 20 karakter.');
@@ -74,8 +76,11 @@ module.exports = async function handler(req, res) {
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'openai/gpt-oss-20b',
-        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompts[type] + content }],
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: (task === 'document-notes'
+          ? 'Susun catatan belajar padat dari SELURUH bagian materi berikut, maksimal 1800 karakter. Pertahankan setiap subtopik, fakta penting, definisi, angka, hubungan sebab-akibat, dan contoh utama yang diperlukan untuk membuat kuis atau flashcard. Jangan hanya mengambil bagian awal. Catatan akan digabungkan dengan bagian dokumen lain. Jangan mengarang atau menambah fakta.\n\nMateri:\n'
+          : prompts[type]) + content }],
         temperature: 0.4,
+        ...(task === 'document-notes' ? { max_completion_tokens: 1600, reasoning_effort: 'low' } : {}),
       }),
       signal: AbortSignal.timeout(45000),
     });
@@ -83,7 +88,8 @@ module.exports = async function handler(req, res) {
       console.error(`StudyGen Groq returned HTTP ${upstream.status}`);
       const [code, error] = upstreamErrors[upstream.status]
         || ['AI_UPSTREAM_ERROR', 'Layanan AI gagal memproses permintaan. Silakan coba lagi.'];
-      return respond(upstream.status === 429 ? 503 : 502, false, { error, code, upstreamStatus: upstream.status });
+      const retryAfter = upstream.status === 429 ? Math.min(120, Math.max(1, Math.ceil(Number(upstream.headers?.get('retry-after')) || 60))) : undefined;
+      return respond(upstream.status === 429 ? 503 : 502, false, { error, code, upstreamStatus: upstream.status, ...(retryAfter ? { retryAfter } : {}) });
     }
     groqResponse = await upstream.json();
   } catch (error) {
@@ -94,6 +100,7 @@ module.exports = async function handler(req, res) {
   }
   const result = groqResponse?.choices?.[0]?.message?.content;
   if (typeof result !== 'string' || !result.trim()) return fail(502, fallbackError);
+  if (task === 'document-notes' && result.length > 6000) return fail(502, 'Catatan dokumen dari AI terlalu panjang. Silakan coba lagi.');
   if (type === 'summary') return respond(200, true, { type, settings, result: result.trim() });
 
   let structured;

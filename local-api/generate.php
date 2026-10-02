@@ -39,6 +39,8 @@ if (!is_array($input)) respond(false, ['error' => 'Request tidak valid.'], 400);
 
 $content = isset($input['content']) && is_string($input['content']) ? trim($input['content']) : '';
 $type = isset($input['type']) && is_string($input['type']) ? $input['type'] : '';
+$task = $input['task'] ?? 'generate';
+if (!in_array($task, ['generate', 'document-notes'], true) || ($task === 'document-notes' && $type !== 'summary')) respond(false, ['error' => 'Jenis proses dokumen tidak valid.'], 422);
 $allowedTypes = ['summary', 'quiz', 'flashcard'];
 if ($content === '') respond(false, ['error' => 'Materi tidak boleh kosong.'], 422);
 if (!in_array($type, $allowedTypes, true)) respond(false, ['error' => 'Jenis generate tidak valid.'], 422);
@@ -72,12 +74,15 @@ $prompts = [
     'flashcard' => "Berdasarkan materi berikut, buat tepat {$count} flashcard yang berbeda. Balas HANYA dengan objek JSON valid berbentuk {\"cards\":[{\"front\":\"pertanyaan singkat\",\"back\":\"jawaban yang jelas\"}]}. Jangan gunakan Markdown. Gunakan hanya informasi dari materi.\n\nMateri:\n",
 ];
 if ($type === 'summary') $prompts['summary'] = $summaryInstructions[$summaryLength] . "\n\n" . $prompts['summary'];
+if ($task === 'document-notes') $prompts['summary'] = "Susun catatan belajar padat dari SELURUH bagian materi berikut, maksimal 1800 karakter. Pertahankan setiap subtopik, fakta penting, definisi, angka, hubungan sebab-akibat, dan contoh utama yang diperlukan untuk membuat kuis atau flashcard. Jangan hanya mengambil bagian awal. Catatan akan digabungkan dengan bagian dokumen lain. Jangan mengarang atau menambah fakta.\n\nMateri:\n";
 
 $apiKey = loadEnvValue('GROQ_API_KEY');
 if (!$apiKey || $apiKey === 'your_groq_api_key_here') respond(false, ['error' => 'Gagal menghasilkan materi. Silakan coba lagi.'], 500);
 if (!function_exists('curl_init')) respond(false, ['error' => 'Gagal menghasilkan materi. Silakan coba lagi.'], 500);
 
-$body = json_encode(['model' => 'openai/gpt-oss-20b', 'messages' => [['role' => 'system', 'content' => $systemPrompt], ['role' => 'user', 'content' => $prompts[$type] . $content]], 'temperature' => 0.4], JSON_UNESCAPED_UNICODE);
+$requestBody = ['model' => 'openai/gpt-oss-20b', 'messages' => [['role' => 'system', 'content' => $systemPrompt], ['role' => 'user', 'content' => $prompts[$type] . $content]], 'temperature' => 0.4];
+if ($task === 'document-notes') $requestBody = array_merge($requestBody, ['max_completion_tokens' => 1600, 'reasoning_effort' => 'low']);
+$body = json_encode($requestBody, JSON_UNESCAPED_UNICODE);
 $curl = curl_init('https://api.groq.com/openai/v1/chat/completions');
 curl_setopt_array($curl, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $body, CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $apiKey, 'Content-Type: application/json'], CURLOPT_CONNECTTIMEOUT => 10, CURLOPT_TIMEOUT => 45]);
 $rawResponse = curl_exec($curl);
@@ -94,11 +99,12 @@ if ($httpCode < 200 || $httpCode >= 300) {
     $message = $httpCode === 429
         ? 'Layanan AI sedang sibuk. Silakan coba lagi beberapa saat lagi.'
         : 'Layanan AI gagal memproses permintaan. Silakan coba lagi.';
-    respond(false, ['error' => $message], $httpCode === 429 ? 503 : 502);
+    respond(false, ['error' => $message, 'upstreamStatus' => $httpCode], $httpCode === 429 ? 503 : 502);
 }
 $groqResponse = json_decode($rawResponse, true);
 $result = $groqResponse['choices'][0]['message']['content'] ?? null;
 if (!is_string($result) || trim($result) === '') respond(false, ['error' => 'Gagal menghasilkan materi. Silakan coba lagi.'], 502);
+if ($task === 'document-notes' && strlen($result) > 6000) respond(false, ['error' => 'Catatan dokumen dari AI terlalu panjang. Silakan coba lagi.'], 502);
 if ($type === 'summary') respond(true, ['type' => $type, 'settings' => $settings, 'result' => trim($result)]);
 
 $cleanResult = trim($result);

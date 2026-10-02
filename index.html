@@ -32,11 +32,17 @@
           <div class="pdf-upload">
             <label class="pdf-upload-button" for="pdf-file">Pilih file PDF</label>
             <input id="pdf-file" class="sr-only" type="file" accept=".pdf,application/pdf" aria-describedby="pdf-status">
-            <span id="pdf-status" class="pdf-status" role="status" aria-live="polite">Maksimal 10 MB. Teks PDF akan masuk ke kolom materi.</span>
+            <span id="pdf-status" class="pdf-status" role="status" aria-live="polite">Lampirkan PDF maksimal 10 MB dan 500 halaman. Isinya tidak masuk ke kolom teks.</span>
           </div>
+          <div id="pdf-attachment" class="pdf-attachment" hidden>
+            <div class="pdf-attachment-copy"><strong id="pdf-name"></strong><span id="pdf-details"></span></div>
+            <button id="remove-pdf" class="action-button secondary" type="button">Hapus PDF</button>
+          </div>
+          <div id="text-material">
           <label class="sr-only" for="study-content">Materi pembelajaran</label>
           <textarea id="study-content" maxlength="15000" placeholder="Tempel atau tulis materi pelajaranmu di sini..."></textarea>
           <p class="helper-text">Minimal 20 karakter. Semakin jelas materinya, semakin berguna hasilnya.</p>
+          </div>
           <label class="field-label" for="material-name">Judul materi <span>(opsional)</span></label>
           <input id="material-name" class="text-input" type="text" maxlength="100" placeholder="Contoh: Biologi — Sistem pencernaan">
 
@@ -91,6 +97,7 @@
     <footer class="site-footer"><span>STUDYGEN</span><span>Belajar, satu langkah setiap kali.</span></footer>
   </div>
   <script src="js/interactive.js"></script>
+  <script src="js/document.js"></script>
   <script src="js/app.js" data-api-url="local-api/generate.php"></script>
 </body>
 </html>

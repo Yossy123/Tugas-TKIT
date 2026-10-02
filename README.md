@@ -8,7 +8,7 @@ AI-powered Study Assistant untuk mengubah materi belajar menjadi ringkasan, quiz
 - Kuis interaktif: 5/10/15 soal, pilihan kesulitan, skor, pembahasan, dan latihan ulang soal yang salah
 - Flashcard interaktif: 5/10/15 kartu, buka jawaban, tandai pemahaman, dan ulangi kartu yang belum dipahami
 - Riwayat lokal berisi materi, hasil AI, pengaturan, dan progres latihan
-- Impor teks dari PDF ke kolom materi (maksimal 10 MB)
+- Lampiran PDF hingga 10 MB / 500 halaman, diproses terpisah dari kolom teks
 - Validasi materi dan loading/error state
 
 ## Tech Stack
@@ -33,7 +33,27 @@ Maksimal 30 hasil terakhir disimpan dengan `localStorage` pada browser dan alama
 
 ## Memakai PDF
 
-Klik **Pilih file PDF**. StudyGen membaca teks PDF di browser dan mengisinya ke kolom materi; pengguna dapat memeriksa atau mengedit teks sebelum membuat bahan belajar. Batas materi tetap 15.000 karakter. Jika PDF lebih panjang, hanya bagian awal hingga batas tersebut yang diambil; pembacaan dibatasi pada 100 halaman pertama. PDF hasil scan yang hanya berisi gambar belum dapat dibaca karena aplikasi belum memiliki OCR.
+Klik **Pilih file PDF** untuk melampirkan dokumen. Nama file, ukuran, dan jumlah
+halaman ditampilkan; isi PDF tidak dimasukkan ke kolom teks. Klik **Hapus PDF**
+untuk kembali ke materi ketik sebelumnya. Batas 15.000 karakter hanya berlaku
+untuk materi yang diketik/ditempel.
+
+PDF dapat berukuran hingga 10 MB, 500 halaman, dan 1 juta karakter teks yang
+terbaca. Dokumen yang melewati batas ditolak dengan pesan, bukan dipotong diam-diam.
+PDF dibaca di browser karena backend Groq saat ini menerima teks, bukan PDF mentah.
+Seluruh halaman dibaca; dokumen panjang diproses per bagian menjadi catatan padat,
+lalu catatan seluruh bagian digabungkan untuk membuat ringkasan, kuis, atau flashcard.
+Pemrosesan bertahap memakai lebih dari satu permintaan AI dan dapat memerlukan
+waktu lebih lama. Catatan dipakai ulang selama PDF yang sama masih terlampir.
+Jika batas layanan AI tercapai, aplikasi mencoba ulang maksimal dua kali sebelum
+menampilkan error. Peringkasan dapat menghilangkan detail; hasil belajar tetap
+perlu diperiksa terhadap dokumen asli.
+
+File PDF asli tidak disimpan ke server atau localStorage. Riwayat menyimpan nama
+PDF, jumlah halaman, catatan yang dipakai, hasil, dan progres. Hasil/progres bisa
+dibuka kembali; pilih ulang file untuk membuat bahan belajar baru dari PDF.
+PDF hasil scan yang hanya berisi gambar memerlukan OCR dan belum didukung.
+Halaman tanpa teks dilaporkan agar pengguna mengetahui bagian yang tidak terbaca.
 
 Build PDF.js 5.7.284 disertakan secara lokal di `js/vendor/pdfjs` beserta lisensinya, sehingga fitur PDF tidak memerlukan CDN atau instalasi npm saat aplikasi dijalankan.
 

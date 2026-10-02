@@ -65,7 +65,9 @@
       && queue.slice(0, saved.position).every((i) => ratings[i]) ? saved.position : 0;
     return { queue, position, ratings, revealed: saved?.revealed === true };
   };
-  const validRecord = (record) => record && validText(record.id, 100) && validText(record.title, 100)
+  const validSource = (source) => source === undefined || (source?.type === 'pdf' && validText(source.name, 255)
+    && Number.isInteger(source.pages) && source.pages >= 1 && source.pages <= 500);
+  const validRecord = (record) => record && validText(record.id, 100) && validText(record.title, 100) && validSource(record.source)
     && Object.hasOwn(labels, record.type) && validText(record.content, 15000)
     && Number.isFinite(record.createdAt) && record.createdAt > 0 && Number.isFinite(new Date(record.createdAt).getTime())
     && validResult(record.type, record.result);
@@ -314,6 +316,7 @@
         id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         title: options.title?.trim().slice(0, 100) || content.replace(/\s+/g, ' ').slice(0, 70),
         createdAt: Date.now(), type: data.type, content, result: data.result, settings,
+        ...(options.source ? { source: options.source } : {}),
       };
       active.progress = normalizeProgress(active, null);
       records = [active, ...records].slice(0, MAX_RECORDS);
