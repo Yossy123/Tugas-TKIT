@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/generate.js": { "maxDuration": 60, "excludeFiles": "{.env,.env.*,api/*.php,tests/**,.tmp/**}" }
+  },
+  "rewrites": [
+    { "source": "/api/generate.php", "destination": "/api/generate" }
+  ]
+}

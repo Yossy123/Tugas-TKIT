@@ -1,0 +1,9 @@
+.env
+.env.*
+.git
+.tmp
+.commandcode
+node_modules
+dist
+tests
+api/generate.php

@@ -2,3 +2,7 @@
 node_modules/
 .tmp/
 .commandcode/
+.env.*
+!.env.example
+.vercel/
+dist/

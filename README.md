@@ -17,6 +17,7 @@ AI-powered Study Assistant untuk mengubah materi belajar menjadi ringkasan, quiz
 - CSS
 - JavaScript
 - PHP
+- Node.js (backend Vercel)
 - Groq API
 - PDF.js untuk membaca PDF di browser
 
@@ -52,6 +53,31 @@ GROQ_API_KEY=
 ```
 
 API key hanya dibaca oleh backend PHP dan tidak pernah dikirim ke browser. File `.env` sudah dikecualikan dari Git.
+
+## Deploy ke Vercel
+
+Backend Vercel menggunakan `api/generate.js` (Node.js 24). Endpoint frontend
+`/api/generate.php` diarahkan ke `/api/generate` melalui `vercel.json`, sehingga
+instalasi XAMPP tetap memakai backend PHP tanpa mengubah frontend.
+
+1. Di Vercel pilih **Add New → Project**, lalu import repo `Yossy123/Tugas-TKIT`.
+2. Gunakan **Framework Preset: Other** dan **Root Directory: `./`**. Konfigurasi
+   repo sudah menetapkan **Build Command: `npm run build`** dan **Output Directory: `dist`**.
+3. Tambahkan environment variable **`GROQ_API_KEY`**, dengan value berupa API key
+   Groq dari `.env` lokal. Aktifkan untuk **Production** dan **Preview** bila diperlukan.
+   Jangan menambahkan prefix `NEXT_PUBLIC_` atau `VITE_`.
+4. Klik **Deploy**. Jika environment variable baru ditambahkan atau diubah setelah
+   deploy, lakukan **Redeploy** agar deployment memakai value tersebut.
+5. Buka URL hasil deploy, masukkan materi, lalu coba ringkasan, kuis, dan flashcard.
+
+Di Vercel API key dibaca melalui `process.env.GROQ_API_KEY`; `.env` lokal tidak
+perlu diunggah. Build hanya menyalin `index.html`, `css/`, dan `js/` ke `dist/`.
+Folder tersebut tidak memuat API key, backend PHP, atau file pengujian.
+`.vercelignore` juga mengecualikan `.env` dan backend PHP dari upload CLI.
+
+Pemeriksaan backend Vercel: jalankan `npm test` dari root project. Tes memakai
+respons Groq simulasi dan tidak membutuhkan API key. `npm run build` menyiapkan
+aset publik tanpa membutuhkan dependency tambahan.
 
 ## Pemeriksaan pengembangan
 
