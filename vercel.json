@@ -4,7 +4,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/generate.js": { "maxDuration": 60, "excludeFiles": "{.env,.env.*,api/*.php,tests/**,.tmp/**}" }
+    "api/generate.js": { "maxDuration": 60, "excludeFiles": "{.env,.env.*,local-api/**,tests/**,.tmp/**}" }
   },
   "rewrites": [
     { "source": "/api/generate.php", "destination": "/api/generate" }

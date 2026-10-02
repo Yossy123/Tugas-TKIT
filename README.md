@@ -56,9 +56,11 @@ API key hanya dibaca oleh backend PHP dan tidak pernah dikirim ke browser. File 
 
 ## Deploy ke Vercel
 
-Backend Vercel menggunakan `api/generate.js` (Node.js 24). Endpoint frontend
-`/api/generate.php` diarahkan ke `/api/generate` melalui `vercel.json`, sehingga
-instalasi XAMPP tetap memakai backend PHP tanpa mengubah frontend.
+Backend Vercel menggunakan `api/generate.js` (Node.js 24). Build mengatur frontend
+agar memakai `/api/generate`. Instalasi XAMPP memakai `local-api/generate.php`
+melalui atribut `data-api-url` pada script frontend. Backend PHP disimpan di luar
+folder `api/` agar Vercel tidak menyajikannya sebagai endpoint statis.
+Rute lama `/api/generate.php` tetap diarahkan ke backend Node.js untuk frontend lama.
 
 1. Di Vercel pilih **Add New → Project**, lalu import repo `Yossy123/Tugas-TKIT`.
 2. Gunakan **Framework Preset: Other** dan **Root Directory: `./`**. Konfigurasi

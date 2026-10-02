@@ -44,7 +44,7 @@ const samplePdf = () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     // Validate the real PHP endpoint before intercepting AI responses in the browser.
-    assert.equal((await fetch(`${base}/api/generate.php`)).status, 405);
+    assert.equal((await fetch(`${base}/local-api/generate.php`)).status, 405);
     const invalidInputs = [
       { type: 'quiz', content: '' }, { type: 'unknown', content: material },
       { type: 'quiz', content: material, settings: 'bad' },
@@ -55,7 +55,7 @@ const samplePdf = () => {
       { type: 'flashcard', content: 'x'.repeat(15001) },
     ];
     for (const input of invalidInputs) {
-      const response = await fetch(`${base}/api/generate.php`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+      const response = await fetch(`${base}/local-api/generate.php`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
       assert.equal(response.status, 422);
       assert.equal((await response.json()).success, false);
     }
@@ -70,7 +70,7 @@ const samplePdf = () => {
     const requests = [];
     let responseMode = 'normal';
     let releaseRequest;
-    await page.route('**/api/generate.php', async (route) => {
+    await page.route('**/local-api/generate.php', async (route) => {
       const input = route.request().postDataJSON();
       requests.push(input);
       if (responseMode === 'pending') await new Promise((resolve) => { releaseRequest = resolve; });

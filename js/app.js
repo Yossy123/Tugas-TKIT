@@ -27,6 +27,7 @@
   const MAX_PDF_SIZE = 10 * 1024 * 1024;
   const MAX_PDF_PAGES = 100;
   const scriptUrl = document.currentScript?.src || new URL('js/app.js', document.baseURI).href;
+  const apiEndpoint = document.currentScript?.dataset.apiUrl || 'api/generate';
   const pdfModuleUrl = new URL('vendor/pdfjs/pdf.min.mjs', scriptUrl).href;
   const pdfWorkerUrl = new URL('vendor/pdfjs/pdf.worker.min.mjs', scriptUrl).href;
 
@@ -145,7 +146,7 @@
     showMessage(); setLoading(true); badge.hidden = true;
     setResult('StudyGen sedang memproses materi...', 'is-loading');
     try {
-      const response = await fetch('api/generate.php', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ type:requestType, content:studyMaterial, settings }) });
+      const response = await fetch(apiEndpoint, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ type:requestType, content:studyMaterial, settings }) });
       let data;
       try { data = await response.json(); } catch { throw new Error('Respons server tidak valid.'); }
       if (!response.ok || !data.success) throw new Error(data.error || 'Gagal menghasilkan materi. Silakan coba lagi.');

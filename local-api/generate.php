@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+// Local PHP/XAMPP backend; Vercel uses api/generate.js.
+
 header('Content-Type: application/json; charset=utf-8');
 header_remove('X-Powered-By');
 
