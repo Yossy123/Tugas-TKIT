@@ -81,6 +81,14 @@ Pemeriksaan backend Vercel: jalankan `npm test` dari root project. Tes memakai
 respons Groq simulasi dan tidak membutuhkan API key. `npm run build` menyiapkan
 aset publik tanpa membutuhkan dependency tambahan.
 
+Jika generate gagal, periksa **Network → `/api/generate` → Response** di browser,
+atau **Logs** pada Vercel. Kode `AI_AUTH_FAILED` / `upstreamStatus: 401` berarti
+Groq menolak API key. Isi value `GROQ_API_KEY` hanya dengan key, tanpa awalan
+`GROQ_API_KEY=`, tanda kutip, atau `Bearer`, lalu redeploy. `AI_ACCESS_DENIED` (403)
+berarti akses ditolak; periksa izin model/organisasi di Groq. `AI_MODEL_UNAVAILABLE`
+(404) berarti model tidak tersedia, sedangkan `AI_RATE_LIMITED` (429) berarti
+batas layanan tercapai. Respons tidak menyertakan key atau body error mentah Groq.
+
 ## Pemeriksaan pengembangan
 
 Pemeriksaan browser berada di `tests` dan membutuhkan Node.js serta PHP pada PATH. Jalankan `npm install` lalu `npm test` dari folder `tests`; pada instalasi Playwright pertama, jalankan `npx playwright install chromium`. Tes menjalankan server PHP lokal sementara pada port 18743 dan menggunakan respons AI simulasi, sehingga tidak memerlukan API key atau kredit Groq. Browser pengguna dan riwayatnya tidak dipakai. Screenshot desktop dan mobile tersimpan di `.tmp`.

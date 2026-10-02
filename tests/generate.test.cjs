@@ -148,11 +148,17 @@ test('invalid generated quizzes and cards are rejected before reaching the UI', 
 test('Groq HTTP errors produce safe JSON and never expose upstream details', async (t) => {
   t.mock.method(console, 'error', () => {});
   const upstream = mockGroq(t, '');
-  for (const status of [401, 429, 500]) {
+  const expectedCodes = {
+    400: 'AI_REQUEST_REJECTED', 401: 'AI_AUTH_FAILED', 403: 'AI_ACCESS_DENIED',
+    404: 'AI_MODEL_UNAVAILABLE', 422: 'AI_REQUEST_REJECTED', 429: 'AI_RATE_LIMITED', 500: 'AI_UPSTREAM_ERROR',
+  };
+  for (const status of [400, 401, 403, 404, 422, 429, 500]) {
     upstream.mock.mockImplementation(async () => ({ ok: false, status, json: async () => ({ error: 'test-only-key' }) }));
     const response = await request();
     assert.equal(response.statusCode, status === 429 ? 503 : 502);
     assert.equal(response.body.success, false);
+    assert.equal(response.body.code, expectedCodes[status]);
+    assert.equal(response.body.upstreamStatus, status);
     assert.ok(!JSON.stringify(response).includes('test-only-key'));
   }
 });

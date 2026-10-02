@@ -1,6 +1,15 @@
 // Vercel backend. The PHP endpoint is retained for local XAMPP installations.
 const letters = ['A', 'B', 'C', 'D'];
 const fallbackError = 'Gagal menghasilkan materi. Silakan coba lagi.';
+// Fixed messages/codes keep provider diagnostics useful without exposing secrets.
+const upstreamErrors = {
+  400: ['AI_REQUEST_REJECTED', 'Permintaan ke layanan AI ditolak. Hubungi pengelola aplikasi.'],
+  401: ['AI_AUTH_FAILED', 'Konfigurasi akses layanan AI tidak valid. Hubungi pengelola aplikasi.'],
+  403: ['AI_ACCESS_DENIED', 'Akses ke layanan AI ditolak. Hubungi pengelola aplikasi.'],
+  404: ['AI_MODEL_UNAVAILABLE', 'Model AI belum tersedia. Hubungi pengelola aplikasi.'],
+  422: ['AI_REQUEST_REJECTED', 'Permintaan ke layanan AI ditolak. Hubungi pengelola aplikasi.'],
+  429: ['AI_RATE_LIMITED', 'Layanan AI sedang sibuk. Silakan coba lagi beberapa saat lagi.'],
+};
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const textLength = (value) => Array.from(value).length;
 const validText = (value) => typeof value === 'string' && value.trim() !== '' && textLength(value) <= 2000;
@@ -72,9 +81,9 @@ module.exports = async function handler(req, res) {
     });
     if (!upstream.ok) {
       console.error(`StudyGen Groq returned HTTP ${upstream.status}`);
-      return fail(upstream.status === 429 ? 503 : 502, upstream.status === 429
-        ? 'Layanan AI sedang sibuk. Silakan coba lagi beberapa saat lagi.'
-        : 'Layanan AI gagal memproses permintaan. Silakan coba lagi.');
+      const [code, error] = upstreamErrors[upstream.status]
+        || ['AI_UPSTREAM_ERROR', 'Layanan AI gagal memproses permintaan. Silakan coba lagi.'];
+      return respond(upstream.status === 429 ? 503 : 502, false, { error, code, upstreamStatus: upstream.status });
     }
     groqResponse = await upstream.json();
   } catch (error) {
