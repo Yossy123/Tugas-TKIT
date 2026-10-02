@@ -1,0 +1,6 @@
+{
+  "name": "studygen-browser-checks",
+  "private": true,
+  "scripts": { "test": "node studygen.cjs" },
+  "devDependencies": { "playwright": "1.61.0" }
+}

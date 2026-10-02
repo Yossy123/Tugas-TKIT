@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="StudyGen membantu mengubah materi belajar menjadi ringkasan, kuis, dan flashcard.">
+  <title>StudyGen — Ruang Belajar</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="site-frame">
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="StudyGen, beranda"><span class="brand-mark" aria-hidden="true">S.</span><span>studygen</span></a>
+      <span class="header-note">RUANG BELAJAR &nbsp;/&nbsp; 01</span>
+    </header>
+
+    <main class="app-shell">
+      <section class="intro" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span> ASISTEN BELAJAR</p>
+          <h1 id="page-title">Materimu, <em>lebih mudah</em><br>dipahami.</h1>
+        </div>
+        <p class="intro-copy">Tempel materi atau pilih PDF yang ingin dipelajari. Ubah menjadi ringkasan, kuis, atau kartu belajar dalam satu langkah.</p>
+      </section>
+
+      <div class="workspace">
+        <section class="panel input-panel" aria-labelledby="material-title">
+          <div class="panel-heading">
+            <div class="heading-group"><span class="step-number">01</span><div><p class="section-kicker">BAHAN BELAJAR</p><h2 id="material-title">Masukkan materi</h2></div></div>
+            <span id="char-counter" class="counter" aria-live="polite">0 / 15.000</span>
+          </div>
+          <div class="pdf-upload">
+            <label class="pdf-upload-button" for="pdf-file">Pilih file PDF</label>
+            <input id="pdf-file" class="sr-only" type="file" accept=".pdf,application/pdf" aria-describedby="pdf-status">
+            <span id="pdf-status" class="pdf-status" role="status" aria-live="polite">Maksimal 10 MB. Teks PDF akan masuk ke kolom materi.</span>
+          </div>
+          <label class="sr-only" for="study-content">Materi pembelajaran</label>
+          <textarea id="study-content" maxlength="15000" placeholder="Tempel atau tulis materi pelajaranmu di sini..."></textarea>
+          <p class="helper-text">Minimal 20 karakter. Semakin jelas materinya, semakin berguna hasilnya.</p>
+          <label class="field-label" for="material-name">Judul materi <span>(opsional)</span></label>
+          <input id="material-name" class="text-input" type="text" maxlength="100" placeholder="Contoh: Biologi — Sistem pencernaan">
+
+          <fieldset class="generation-options">
+            <legend><span class="step-number">02</span> Pilih cara belajar</legend>
+            <div class="option-grid">
+              <label class="type-option is-selected"><input type="radio" name="type" value="summary" class="sr-only" checked><span class="option-indicator" aria-hidden="true"></span><span class="option-copy"><strong>Ringkasan</strong><small>Ambil inti materinya</small></span></label>
+              <label class="type-option"><input type="radio" name="type" value="quiz" class="sr-only"><span class="option-indicator" aria-hidden="true"></span><span class="option-copy"><strong>Kuis</strong><small>Uji pemahamanmu</small></span></label>
+              <label class="type-option"><input type="radio" name="type" value="flashcard" class="sr-only"><span class="option-indicator" aria-hidden="true"></span><span class="option-copy"><strong>Flashcard</strong><small>Ingat poin penting</small></span></label>
+            </div>
+          </fieldset>
+
+          <div class="settings-grid" role="group" aria-label="Pengaturan bahan belajar">
+            <div id="summary-setting">
+              <label class="field-label" for="summary-length">Panjang ringkasan</label>
+              <select id="summary-length"><option value="short">Singkat</option><option value="medium" selected>Sedang</option><option value="long">Lengkap</option></select>
+            </div>
+            <div id="count-setting" hidden>
+              <label id="count-label" class="field-label" for="item-count">Jumlah soal</label>
+              <select id="item-count"><option value="5">5</option><option value="10">10</option><option value="15">15</option></select>
+            </div>
+            <div id="difficulty-setting" hidden>
+              <label class="field-label" for="quiz-difficulty">Kesulitan kuis</label>
+              <select id="quiz-difficulty"><option value="easy">Mudah</option><option value="medium" selected>Sedang</option><option value="hard">Sulit</option></select>
+            </div>
+          </div>
+
+          <button id="generate-button" class="generate-button" type="button"><span class="button-label">Buat bahan belajar</span><span class="button-arrow" aria-hidden="true">↗</span></button>
+          <p id="form-message" class="form-message" role="alert" hidden></p>
+        </section>
+
+        <section class="panel result-panel" aria-labelledby="result-title">
+          <div class="panel-heading result-heading">
+            <div class="heading-group"><span class="step-number">03</span><div><p class="section-kicker">CATATANMU</p><h2 id="result-title">Hasil belajar</h2></div></div>
+            <span id="result-badge" class="result-badge" hidden></span>
+          </div>
+          <p id="result-announcement" class="sr-only" role="status" aria-live="polite"></p>
+          <div id="result-content" class="result-content is-empty"><span class="empty-symbol" aria-hidden="true">✳</span><p class="empty-title">Siap untuk mulai belajar?</p><p>Hasil dari materi yang kamu masukkan akan muncul di sini.</p></div>
+          <p class="result-footnote">Dibuat dari materi yang kamu berikan.</p>
+        </section>
+      </div>
+      <section class="panel history-panel" aria-labelledby="history-title">
+        <div class="panel-heading">
+          <div class="heading-group"><span class="step-number">04</span><div><p class="section-kicker">LANJUTKAN BELAJAR</p><h2 id="history-title">Riwayat belajar</h2></div></div>
+        </div>
+        <p class="history-note">Maksimal 30 hasil terakhir tersimpan di browser ini, beserta progres latihan. Riwayat bisa hilang jika data browser dihapus.</p>
+        <p id="history-message" class="form-message" role="status" hidden></p>
+        <div id="history-list" class="history-list"></div>
+      </section>
+    </main>
+
+    <footer class="site-footer"><span>STUDYGEN</span><span>Belajar, satu langkah setiap kali.</span></footer>
+  </div>
+  <script src="js/interactive.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
