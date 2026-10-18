@@ -15,6 +15,12 @@ const questions = (count) => Array.from({ length: count }, (_, i) => ({
   options: { A: 'Cahaya matahari', B: 'Batu', C: 'Minyak', D: 'Plastik' },
   answer: 'A', explanation: 'Materi menyebutkan cahaya matahari sebagai sumber energi.',
 }));
+const typedQuestions = (type = 'multiple', count) => (type === 'multiple' ? questions(count) : Array.from({ length: count }, (_, i) => {
+  const kind = type === 'mixed' ? ['truefalse', 'short'][i % 2] : type;
+  if (kind === 'truefalse') return { kind, question: `Pernyataan ${i + 1}: tumbuhan butuh cahaya.`, answer: true, explanation: 'Materi menyebut cahaya.' };
+  if (kind === 'short') return { kind, question: `Isian ${i + 1}: pigmen penyerap cahaya?`, answer: 'klorofil', alternatives: ['zat hijau daun'], explanation: 'Klorofil menyerap cahaya.' };
+  return { kind: 'essay', question: `Esai ${i + 1}: jelaskan fotosintesis.`, answer: 'Cahaya, air, CO2 menjadi glukosa dan oksigen.', explanation: 'Sebut bahan dan hasil.' };
+}));
 const cards = (count) => Array.from({ length: count }, (_, i) => ({ front: `Konsep ${i + 1}?`, back: `Penjelasan konsep ${i + 1}.` }));
 const samplePdf = (pageCount = 1, empty = false) => {
   const fontId = 3 + pageCount * 2;
@@ -84,9 +90,12 @@ const samplePdf = (pageCount = 1, empty = false) => {
       if (responseMode === 'pending') await new Promise((resolve) => { releaseRequest = resolve; });
       if (responseMode === 'server-error') return route.fulfill({ status: 503, json: { success: false, error: 'Layanan AI sedang sibuk.' } });
       if (responseMode === 'non-json') return route.fulfill({ status: 200, body: '<html>invalid</html>' });
+      if (input.task === 'chat') return route.fulfill({ json: { success: true, task: 'chat', result: `Jawaban dari materi: ${input.messages.at(-1).content}` } });
+      if (input.task === 'grade') return route.fulfill({ json: { success: true, task: 'grade', result: { score: input.answer.includes('cahaya') ? 80 : 20, feedback: 'Umpan balik esai.' } } });
+      if (input.task === 'extract-url') return route.fulfill({ json: { success: true, task: 'extract-url', result: { kind: 'article', title: 'Artikel Fotosintesis', url: input.url, text: material.repeat(3) } } });
       const count = input.settings.count;
       const result = input.type === 'summary' ? 'Ringkasan:\nFotosintesis menghasilkan glukosa.\n\nPoin Penting:\n- Menggunakan cahaya matahari.'
-        : input.type === 'quiz' ? { questions: questions(count) } : { cards: cards(count) };
+        : input.type === 'quiz' ? { questions: typedQuestions(input.settings.questionType, count) } : { cards: cards(count) };
       if (responseMode === 'wrong-count') result.questions.pop();
       await route.fulfill({ json: { success: true, type: input.type, result, settings: input.settings } });
     });
@@ -146,7 +155,13 @@ const samplePdf = (pageCount = 1, empty = false) => {
     assert.equal(await page.getByRole('button', { name: 'Buka jawaban', exact: true }).count(), 1);
     await page.locator('#pdf-file').setInputFiles({ name: 'scanned.pdf', mimeType: 'application/pdf', buffer: samplePdf(1, true) });
     await page.waitForFunction(() => document.getElementById('pdf-status').textContent.includes('perlu OCR'));
-    assert.equal(await page.locator('#pdf-attachment').isVisible(), false);
+    assert.equal(await page.locator('#pdf-attachment').isVisible(), true);
+    assert.match(await page.locator('#run-ocr').innerText(), /Baca 1 halaman scan/);
+    const beforeScan = requests.length;
+    await page.locator('#generate-button').click();
+    assert.match(await page.locator('#form-message').innerText(), /Jalankan OCR/);
+    assert.equal(requests.length, beforeScan);
+    await page.locator('#remove-pdf').click();
     await page.evaluate((storageKey) => localStorage.removeItem(storageKey), key);
     await page.reload();
     console.log('PASS: PDF attachments stay out of textarea; all long-PDF pages reach AI; cached notes and PDF history work; scans report OCR requirement');
@@ -281,6 +296,113 @@ const samplePdf = (pageCount = 1, empty = false) => {
     assert.equal(await page.locator('.history-item').count(), 30);
     assert.equal(await page.evaluate((storageKey) => JSON.parse(localStorage.getItem(storageKey)).length, key), 30);
     console.log('PASS: damaged history recovery and 30-record limit');
+
+    await page.evaluate((storageKey) => localStorage.removeItem(storageKey), key);
+    await page.reload();
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: base });
+    await page.locator('#source-url').fill('https://contoh.com/fotosintesis');
+    await page.locator('#fetch-url').click();
+    await page.waitForFunction(() => document.getElementById('pdf-status').textContent.includes('Isi artikel siap'));
+    assert.equal(await page.locator('#pdf-name').innerText(), 'Artikel Fotosintesis');
+    assert.equal(await page.locator('#remove-pdf').innerText(), 'Hapus URL');
+    assert.equal(await page.locator('#text-material').isVisible(), false);
+    await page.locator('#output-language').selectOption('en');
+    await page.locator('#generate-button').click();
+    await page.waitForFunction(() => !document.getElementById('generate-button').disabled);
+    assert.equal(requests.at(-1).settings.language, 'en');
+    const urlRecord = await page.evaluate((storageKey) => JSON.parse(localStorage.getItem(storageKey))[0], key);
+    assert.deepEqual(urlRecord.source, { type: 'url', name: 'Artikel Fotosintesis', url: 'https://contoh.com/fotosintesis', kind: 'article' });
+    assert.equal(urlRecord.settings.language, 'en');
+    assert.match(await page.locator('.session-source').innerText(), /Artikel Fotosintesis/);
+    await page.locator('#remove-pdf').click();
+    await page.locator('#output-language').selectOption('id');
+    console.log('PASS: URL source becomes an attachment and output language is sent and saved');
+
+    await page.locator('#export-copy').click();
+    assert.match(await page.evaluate(() => navigator.clipboard.readText()), /^Artikel Fotosintesis\r?\n[\s\S]*Fotosintesis menghasilkan glukosa/);
+    const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#export-download').click()]);
+    assert.equal(download.suggestedFilename(), 'artikel-fotosintesis-summary.txt');
+    await page.locator('#export-edit').click();
+    assert.equal(await page.locator('#chat-panel').isVisible(), false);
+    await page.locator('.edit-form textarea').first().fill('Ringkasan yang sudah diperbaiki pengguna.');
+    await page.getByRole('button', { name: 'Simpan perubahan', exact: true }).click();
+    assert.match(await page.locator('.summary-text').innerText(), /sudah diperbaiki pengguna/);
+    assert.equal(await page.evaluate((storageKey) => JSON.parse(localStorage.getItem(storageKey))[0].result, key), 'Ringkasan yang sudah diperbaiki pengguna.');
+    console.log('PASS: copy, download, and editing a result');
+
+    await page.locator('#chat-input').fill('Apa itu klorofil?');
+    await page.locator('#chat-input').press('Enter');
+    await page.waitForSelector('.chat-bubble.assistant');
+    assert.match(await page.locator('.chat-bubble.assistant').innerText(), /Jawaban dari materi: Apa itu klorofil\?/);
+    assert.deepEqual(requests.at(-1).messages, [{ role: 'user', content: 'Apa itu klorofil?' }]);
+    assert.equal(requests.at(-1).content, urlRecord.content);
+    await page.reload();
+    await page.getByRole('button', { name: 'Buka Artikel Fotosintesis, Ringkasan', exact: true }).click();
+    assert.equal(await page.locator('.chat-bubble').count(), 2);
+    console.log('PASS: chat answers are shown and saved with the material');
+
+    await page.locator('label.type-option:has(input[value="quiz"])').click();
+    await page.locator('#question-type').selectOption('mixed');
+    await generate('quiz', 5, 'Kuis campuran');
+    assert.equal(requests.at(-1).settings.questionType, 'mixed');
+    await page.locator('input[name="question-0"][value="true"]').check();
+    await page.locator('#answer-1').fill('klorofl');
+    await page.locator('input[name="question-2"][value="false"]').check();
+    await page.locator('#answer-3').fill('Zat hijau daun');
+    await page.locator('input[name="question-4"][value="true"]').check();
+    await page.getByRole('button', { name: 'Periksa jawaban', exact: true }).click();
+    assert.match(await page.locator('.score-box').innerText(), /80.*4\/5/);
+    await page.getByRole('button', { name: 'Ulangi 1 soal yang salah', exact: true }).click();
+    await page.locator('input[name="question-2"][value="true"]').check();
+    await page.getByRole('button', { name: 'Periksa jawaban', exact: true }).click();
+    assert.match(await page.locator('.score-box').innerText(), /100.*1\/1/);
+    assert.equal(await page.locator('#stats-content .chart-svg').count(), 1);
+    assert.equal(await page.locator('#stats-content .chart-point').count(), 2);
+    assert.equal(await page.locator('.mistake-list li').count(), 1);
+    assert.match(await page.locator('.mistake-list li').innerText(), /Pernyataan 3[\s\S]*salah 1×/);
+
+    await page.locator('#question-type').selectOption('essay');
+    await generate('quiz', 5, 'Kuis esai');
+    const beforeGrades = requests.length;
+    for (let i = 0; i < 5; i++) await page.locator(`#answer-${i}`).fill(i < 4 ? 'Butuh cahaya dan air' : 'Tidak tahu');
+    await page.getByRole('button', { name: 'Periksa jawaban', exact: true }).click();
+    await page.waitForSelector('.score-box');
+    assert.equal(requests.slice(beforeGrades).filter((input) => input.task === 'grade').length, 5);
+    assert.match(await page.locator('.score-box').innerText(), /68.*3,4\/5/);
+    assert.match(await page.locator('.answer-feedback').first().innerText(), /Nilai esai: 80\/100/);
+    console.log('PASS: mixed, short-answer, true/false and AI-graded essay quizzes; stats chart and mistakes');
+
+    await generate('flashcard', 5, 'Kartu SRS');
+    for (const label of ['Belum paham', 'Ragu-ragu', 'Sudah paham', 'Sudah paham', 'Sudah paham']) {
+      await page.getByRole('button', { name: 'Buka jawaban', exact: true }).click();
+      await page.getByRole('button', { name: label, exact: true }).click();
+    }
+    const srs = await page.evaluate((storageKey) => JSON.parse(localStorage.getItem(storageKey))[0].srs, key);
+    assert.deepEqual(Object.keys(srs), ['0', '1', '2', '3', '4']);
+    assert.equal(srs[0].reps, 0);
+    assert.equal(srs[2].reps, 1);
+    assert.match(await page.locator('.session-hint').innerText(), /Jadwal ulang berikutnya: besok/);
+    await page.evaluate((storageKey) => {
+      const items = JSON.parse(localStorage.getItem(storageKey));
+      Object.values(items[0].srs).forEach((state) => { state.due = Date.now() - 1000; });
+      localStorage.setItem(storageKey, JSON.stringify(items));
+    }, key);
+    await page.reload();
+    assert.match(await page.locator('.history-progress').first().innerText(), /5 perlu diulang hari ini/);
+    await page.locator('.stat-block').getByRole('button', { name: 'Buka Kartu SRS untuk mengulang 5 kartu', exact: true }).click();
+    await page.getByRole('button', { name: 'Ulangi 5 kartu jatuh tempo', exact: true }).click();
+    assert.match(await page.locator('.session-hint').first().innerText(), /Kartu 1 dari 5/);
+    console.log('PASS: spaced repetition schedules cards and offers due reviews');
+
+    await page.locator('#theme-toggle').click();
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
+    await page.reload();
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
+    assert.equal(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), 'rgb(20, 24, 21)');
+    await page.screenshot({ path: path.join(root, '.tmp', 'studygen-dark.png'), fullPage: true });
+    await page.locator('#theme-toggle').click();
+    assert.equal(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), 'rgb(246, 243, 236)');
+    console.log('PASS: dark mode toggle persists');
 
     fs.mkdirSync(path.join(root, '.tmp'), { recursive: true });
     await page.evaluate((storageKey) => localStorage.removeItem(storageKey), key);

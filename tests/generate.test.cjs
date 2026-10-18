@@ -201,3 +201,96 @@ test('malformed or empty upstream responses produce a gateway error', async (t) 
     assert.equal((await request()).statusCode, 502);
   }
 });
+
+test('language setting switches the system prompt and invalid new settings are rejected', async (t) => {
+  const upstream = mockGroq(t, 'Summary text.');
+  assert.equal((await request({ type: 'summary', content: material, settings: { language: 'en' } })).statusCode, 200);
+  assert.match(JSON.parse(upstream.mock.calls[0].arguments[1].body).messages[0].content, /bahasa Inggris/);
+  assert.equal((await request({ type: 'summary', content: material })).statusCode, 200);
+  assert.match(JSON.parse(upstream.mock.calls[1].arguments[1].body).messages[0].content, /Bahasa Indonesia/);
+  for (const settings of [{ language: 'fr' }, { questionType: 'matching' }]) {
+    assert.equal((await request({ type: 'quiz', content: material, settings })).statusCode, 422);
+  }
+  assert.equal(upstream.mock.callCount(), 2);
+});
+
+test('true/false, short-answer, essay, and mixed quizzes are validated and normalized', async (t) => {
+  const upstream = mockGroq(t, '');
+  const reply = (questions) => upstream.mock.mockImplementation(async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ questions }) } }] }) }));
+  const ask = (questionType) => request({ type: 'quiz', content: material, settings: { count: 5, questionType } });
+
+  reply(Array.from({ length: 5 }, (_, i) => ({ kind: 'truefalse', question: ` Pernyataan ${i} `, answer: i % 2 ? 'salah' : true, explanation: 'x' })));
+  let response = await ask('truefalse');
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body.result.questions[1], { kind: 'truefalse', question: 'Pernyataan 1', answer: false, explanation: 'x' });
+  assert.match(JSON.parse(upstream.mock.calls.at(-1).arguments[1].body).messages[1].content, /benar\/salah/);
+
+  reply(Array.from({ length: 5 }, () => ({ question: 'Pigmen hijau?', answer: ' klorofil ', alternatives: ['zat hijau daun', '', 'zat hijau daun', 5], explanation: 'x' })));
+  response = await ask('short');
+  assert.deepEqual(response.body.result.questions[0], { kind: 'short', question: 'Pigmen hijau?', answer: 'klorofil', alternatives: ['zat hijau daun'], explanation: 'x' });
+
+  reply(Array.from({ length: 5 }, () => ({ question: 'Jelaskan fotosintesis.', answer: 'Cahaya, air, CO2 menjadi glukosa.', explanation: 'Tiga bahan.' })));
+  response = await ask('essay');
+  assert.equal(response.body.result.questions[0].kind, 'essay');
+
+  const mixed = [
+    ...questions(2),
+    { kind: 'truefalse', question: 'Benar?', answer: true, explanation: 'x' },
+    { kind: 'short', question: 'Isi?', answer: 'air', explanation: 'x' },
+    { kind: 'truefalse', question: 'Salah?', answer: false, explanation: 'x' },
+  ];
+  reply(mixed);
+  response = await ask('mixed');
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.result.questions[0].kind, undefined, 'multiple choice keeps the original shape');
+  assert.deepEqual(response.body.result.questions.map((item) => item.kind), [undefined, undefined, 'truefalse', 'short', 'truefalse']);
+
+  for (const [questionType, items] of [
+    ['truefalse', Array.from({ length: 5 }, () => ({ question: 'q', answer: 'mungkin', explanation: 'x' }))],
+    ['short', Array.from({ length: 5 }, () => ({ question: 'q', answer: 'x'.repeat(201), explanation: 'x' }))],
+    ['mixed', [...questions(4), { kind: 'essay', question: 'q', answer: 'a', explanation: 'x' }]],
+  ]) {
+    reply(items);
+    assert.equal((await ask(questionType)).statusCode, 502, questionType);
+  }
+});
+
+test('chat answers from the material and validates the conversation', async (t) => {
+  const upstream = mockGroq(t, ' Fotosintesis menghasilkan oksigen. ');
+  const messages = [{ role: 'user', content: 'Apa hasilnya?' }, { role: 'assistant', content: 'Glukosa.' }, { role: 'user', content: 'Selain itu?' }];
+  const response = await request({ task: 'chat', content: material, messages });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body, { success: true, task: 'chat', result: 'Fotosintesis menghasilkan oksigen.' });
+  const payload = JSON.parse(upstream.mock.calls[0].arguments[1].body);
+  assert.ok(payload.messages[0].content.endsWith(material));
+  assert.match(payload.messages[0].content, /HANYA berdasarkan materi/);
+  assert.deepEqual(payload.messages.slice(1).map((item) => item.role), ['user', 'assistant', 'user']);
+  for (const bad of [[], [{ role: 'assistant', content: 'x' }], [{ role: 'system', content: 'x' }], [{ role: 'user', content: 'x'.repeat(2001) }],
+    Array.from({ length: 13 }, () => ({ role: 'user', content: 'x' }))]) {
+    assert.equal((await request({ task: 'chat', content: material, messages: bad })).statusCode, 422);
+  }
+  assert.equal(upstream.mock.callCount(), 1);
+});
+
+test('essay grading returns a bounded integer score and feedback', async (t) => {
+  const upstream = mockGroq(t, '```json\n{"score": 72.6, "feedback": " Sebagian poin tepat. "}\n```');
+  const body = { task: 'grade', content: material, question: 'Jelaskan.', reference: 'Cahaya dan air.', answer: 'Butuh cahaya.' };
+  const response = await request(body);
+  assert.deepEqual(response.body, { success: true, task: 'grade', result: { score: 73, feedback: 'Sebagian poin tepat.' } });
+  assert.match(JSON.parse(upstream.mock.calls[0].arguments[1].body).messages[1].content, /<<<Butuh cahaya\.>>>/);
+  for (const content of ['{"score":120,"feedback":"x"}', '{"score":50}', 'nilai 80']) {
+    upstream.mock.mockImplementation(async () => ({ ok: true, json: async () => ({ choices: [{ message: { content } }] }) }));
+    assert.equal((await request(body)).statusCode, 502, content);
+  }
+  assert.equal((await request({ ...body, answer: ' ' })).statusCode, 422);
+});
+
+test('URL extraction rejects unsafe targets without any network request', async (t) => {
+  const upstream = mockGroq(t, 'unexpected');
+  for (const url of [undefined, '', 'not a url', 'http://localhost/', 'http://127.0.0.1:80/', 'http://192.168.0.1/', 'file:///etc/passwd']) {
+    const response = await request({ task: 'extract-url', url });
+    assert.equal(response.statusCode, 422, String(url));
+    assert.equal(response.body.success, false);
+  }
+  assert.equal(upstream.mock.callCount(), 0);
+});

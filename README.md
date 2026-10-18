@@ -6,10 +6,15 @@ AI-powered Study Assistant untuk mengubah materi belajar menjadi ringkasan, quiz
 
 - Generate ringkasan dengan pilihan panjang singkat, sedang, atau lengkap
 - Kuis interaktif: 5/10/15 soal, pilihan kesulitan, skor, pembahasan, dan latihan ulang soal yang salah
-- Flashcard interaktif: 5/10/15 kartu, buka jawaban, tandai pemahaman, dan ulangi kartu yang belum dipahami
-- Riwayat lokal berisi materi, hasil AI, pengaturan, dan progres latihan
-- Lampiran PDF hingga 10 MB / 500 halaman, diproses terpisah dari kolom teks
-- Validasi materi dan loading/error state
+- Tipe soal: pilihan ganda, benar/salah, isian singkat (toleran salah ketik kecil), esai yang dinilai AI, atau campuran
+- Flashcard dengan spaced repetition (SM-2): kartu yang belum paham muncul lagi besok, yang sudah paham dijadwalkan makin jarang
+- Tanya materi: chat yang menjawab hanya berdasarkan materi yang sedang dibuka
+- Statistik belajar: grafik skor kuis, rata-rata skor, kartu jatuh tempo hari ini, dan soal yang paling sering salah
+- Edit hasil AI, salin, unduh `.txt`, atau cetak / simpan sebagai PDF
+- Bahasa hasil: Indonesia atau English
+- Sumber materi: ketik, PDF (hingga 10 MB / 500 halaman, plus OCR untuk halaman hasil scan), atau URL artikel / video YouTube
+- Mode gelap (mengikuti sistem, bisa diganti manual)
+- Riwayat lokal berisi materi, hasil AI, pengaturan, progres latihan, jadwal ulang kartu, dan percakapan
 
 ## Tech Stack
 
@@ -52,14 +57,37 @@ perlu diperiksa terhadap dokumen asli.
 File PDF asli tidak disimpan ke server atau localStorage. Riwayat menyimpan nama
 PDF, jumlah halaman, catatan yang dipakai, hasil, dan progres. Hasil/progres bisa
 dibuka kembali; pilih ulang file untuk membuat bahan belajar baru dari PDF.
-PDF hasil scan yang hanya berisi gambar memerlukan OCR dan belum didukung.
-Halaman tanpa teks dilaporkan agar pengguna mengetahui bagian yang tidak terbaca.
+Halaman tanpa teks (hasil scan) dilaporkan, lalu bisa dibaca dengan tombol
+**Baca … halaman scan (OCR)**. OCR memakai Tesseract.js (bahasa Indonesia + Inggris)
+di browser, maksimal 50 halaman per klik. Mesin OCR dan data bahasanya (beberapa MB)
+baru diunduh dari CDN jsDelivr saat tombol diklik, jadi butuh internet. Hasil OCR
+bisa mengandung salah baca.
+
+## Materi dari URL atau YouTube
+
+Tempel URL artikel atau video YouTube di samping tombol PDF, lalu klik **Ambil**.
+Server mengambil teks halaman (tanpa menu dan skrip) atau transkrip/subtitle video,
+lalu memperlakukannya seperti lampiran PDF: teks panjang dipelajari per bagian.
+Halaman yang butuh login atau memuat isi dengan JavaScript, serta video tanpa
+subtitle, tidak bisa diambil; salin teksnya secara manual. Demi keamanan, server
+menolak alamat lokal/jaringan privat (misalnya `localhost` atau `192.168.x.x`).
+
+## Tanya materi, statistik, dan export
+
+- **Tanya materi** muncul di bawah hasil. Jawaban hanya berdasarkan materi yang
+  tersimpan untuk hasil tersebut, dan percakapannya ikut tersimpan di riwayat.
+- **Esai** dinilai AI (0–100) saat kamu klik **Periksa jawaban**; nilai 60 ke atas dihitung benar.
+- **Statistik belajar** dihitung dari riwayat di browser ini: grafik skor kuis
+  (bisa dilihat juga sebagai tabel), kartu yang jatuh tempo hari ini, dan soal yang paling sering salah.
+- **Edit hasil** untuk memperbaiki soal/kartu/ringkasan dari AI. Mengedit kuis mengulang progresnya.
+- **Cetak / PDF** membuka dialog cetak browser; pilih "Simpan sebagai PDF" untuk menyimpannya.
 
 Build PDF.js 5.7.284 disertakan secara lokal di `js/vendor/pdfjs` beserta lisensinya, sehingga fitur PDF tidak memerlukan CDN atau instalasi npm saat aplikasi dijalankan.
 
 ## Installation
 
-1. Clone atau salin repository ini ke folder `htdocs` XAMPP, misalnya `C:\xampp\htdocs\studygen`.
+1. Clone atau salin repository ini ke folder `htdocs` XAMPP, misalnya `C:\xampp\htdocs\studygen`
+   (Laragon: `C:\laragon\www\studygen`, lalu buka `http://localhost/studygen/` atau `http://studygen.test`).
 2. Salin `.env.example` menjadi `.env` pada root project.
 3. Isi `GROQ_API_KEY` di file `.env` dengan API key Groq Anda.
 4. Pastikan ekstensi PHP cURL aktif di XAMPP (`php_curl`).
@@ -97,7 +125,8 @@ perlu diunggah. Build hanya menyalin `index.html`, `css/`, dan `js/` ke `dist/`.
 Folder tersebut tidak memuat API key, backend PHP, atau file pengujian.
 `.vercelignore` juga mengecualikan `.env` dan backend PHP dari upload CLI.
 
-Pemeriksaan backend Vercel: jalankan `npm test` dari root project. Tes memakai
+Pemeriksaan backend Vercel dan logika belajar (penilaian isian, spaced repetition,
+ekstraksi URL): jalankan `npm test` dari root project. Tes memakai
 respons Groq simulasi dan tidak membutuhkan API key. `npm run build` menyiapkan
 aset publik tanpa membutuhkan dependency tambahan.
 

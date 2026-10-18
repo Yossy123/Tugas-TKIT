@@ -5,13 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="StudyGen membantu mengubah materi belajar menjadi ringkasan, kuis, dan flashcard.">
   <title>StudyGen — Ruang Belajar</title>
-  <link rel="stylesheet" href="css/style.css">
+  <script>try { var t = localStorage.getItem('studygen.theme'); if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t; } catch (e) {}</script>
+  <link rel="stylesheet" href="css/style.css?v=2">
 </head>
 <body>
   <div class="site-frame">
     <header class="site-header">
       <a class="brand" href="./" aria-label="StudyGen, beranda"><span class="brand-mark" aria-hidden="true">S.</span><span>studygen</span></a>
-      <span class="header-note">RUANG BELAJAR &nbsp;/&nbsp; 01</span>
+      <div class="header-tools">
+        <span class="header-note">RUANG BELAJAR &nbsp;/&nbsp; 01</span>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false"><span class="theme-icon" aria-hidden="true">☾</span><span class="theme-label">Gelap</span></button>
+      </div>
     </header>
 
     <main class="app-shell">
@@ -20,7 +24,7 @@
           <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span> ASISTEN BELAJAR</p>
           <h1 id="page-title">Materimu, <em>lebih mudah</em><br>dipahami.</h1>
         </div>
-        <p class="intro-copy">Tempel materi atau pilih PDF yang ingin dipelajari. Ubah menjadi ringkasan, kuis, atau kartu belajar dalam satu langkah.</p>
+        <p class="intro-copy">Tempel materi, pilih PDF, atau ambil dari artikel dan video YouTube. Ubah menjadi ringkasan, kuis, atau kartu belajar dalam satu langkah.</p>
       </section>
 
       <div class="workspace">
@@ -29,14 +33,24 @@
             <div class="heading-group"><span class="step-number">01</span><div><p class="section-kicker">BAHAN BELAJAR</p><h2 id="material-title">Masukkan materi</h2></div></div>
             <span id="char-counter" class="counter" aria-live="polite">0 / 15.000</span>
           </div>
-          <div class="pdf-upload">
-            <label class="pdf-upload-button" for="pdf-file">Pilih file PDF</label>
-            <input id="pdf-file" class="sr-only" type="file" accept=".pdf,application/pdf" aria-describedby="pdf-status">
-            <span id="pdf-status" class="pdf-status" role="status" aria-live="polite">Lampirkan PDF maksimal 10 MB dan 500 halaman. Isinya tidak masuk ke kolom teks.</span>
+          <div class="source-row">
+            <div class="pdf-upload">
+              <label class="pdf-upload-button" for="pdf-file">Pilih file PDF</label>
+              <input id="pdf-file" class="sr-only" type="file" accept=".pdf,application/pdf" aria-describedby="pdf-status">
+            </div>
+            <form id="url-form" class="url-form" novalidate>
+              <label class="sr-only" for="source-url">URL artikel atau video YouTube</label>
+              <input id="source-url" class="text-input url-input" type="url" inputmode="url" maxlength="2048" placeholder="atau tempel URL artikel / YouTube" aria-describedby="pdf-status">
+              <button id="fetch-url" class="action-button secondary" type="submit">Ambil</button>
+            </form>
           </div>
+          <p id="pdf-status" class="pdf-status" role="status" aria-live="polite">Lampirkan PDF (maks. 10 MB, 500 halaman) atau tempel URL. Isinya tidak masuk ke kolom teks.</p>
           <div id="pdf-attachment" class="pdf-attachment" hidden>
             <div class="pdf-attachment-copy"><strong id="pdf-name"></strong><span id="pdf-details"></span></div>
-            <button id="remove-pdf" class="action-button secondary" type="button">Hapus PDF</button>
+            <div class="attachment-actions">
+              <button id="run-ocr" class="action-button" type="button" hidden>Baca halaman scan (OCR)</button>
+              <button id="remove-pdf" class="action-button secondary" type="button">Hapus PDF</button>
+            </div>
           </div>
           <div id="text-material">
           <label class="sr-only" for="study-content">Materi pembelajaran</label>
@@ -60,6 +74,10 @@
               <label class="field-label" for="summary-length">Panjang ringkasan</label>
               <select id="summary-length"><option value="short">Singkat</option><option value="medium" selected>Sedang</option><option value="long">Lengkap</option></select>
             </div>
+            <div id="question-type-setting" hidden>
+              <label class="field-label" for="question-type">Tipe soal</label>
+              <select id="question-type"><option value="multiple" selected>Pilihan ganda</option><option value="truefalse">Benar / Salah</option><option value="short">Isian singkat</option><option value="essay">Esai (dinilai AI)</option><option value="mixed">Campuran</option></select>
+            </div>
             <div id="count-setting" hidden>
               <label id="count-label" class="field-label" for="item-count">Jumlah soal</label>
               <select id="item-count"><option value="5">5</option><option value="10">10</option><option value="15">15</option></select>
@@ -67,6 +85,10 @@
             <div id="difficulty-setting" hidden>
               <label class="field-label" for="quiz-difficulty">Kesulitan kuis</label>
               <select id="quiz-difficulty"><option value="easy">Mudah</option><option value="medium" selected>Sedang</option><option value="hard">Sulit</option></select>
+            </div>
+            <div id="language-setting">
+              <label class="field-label" for="output-language">Bahasa hasil</label>
+              <select id="output-language"><option value="id" selected>Bahasa Indonesia</option><option value="en">English</option></select>
             </div>
           </div>
 
@@ -79,16 +101,41 @@
             <div class="heading-group"><span class="step-number">03</span><div><p class="section-kicker">CATATANMU</p><h2 id="result-title">Hasil belajar</h2></div></div>
             <span id="result-badge" class="result-badge" hidden></span>
           </div>
+          <div id="result-toolbar" class="result-toolbar" role="toolbar" aria-label="Aksi hasil belajar" hidden>
+            <button id="export-copy" class="action-button secondary small" type="button">Salin</button>
+            <button id="export-download" class="action-button secondary small" type="button">Unduh .txt</button>
+            <button id="export-print" class="action-button secondary small" type="button">Cetak / PDF</button>
+            <button id="export-edit" class="action-button secondary small" type="button">Edit hasil</button>
+          </div>
           <p id="result-announcement" class="sr-only" role="status" aria-live="polite"></p>
           <div id="result-content" class="result-content is-empty"><span class="empty-symbol" aria-hidden="true">✳</span><p class="empty-title">Siap untuk mulai belajar?</p><p>Hasil dari materi yang kamu masukkan akan muncul di sini.</p></div>
-          <p class="result-footnote">Dibuat dari materi yang kamu berikan.</p>
+          <section id="chat-panel" class="chat-panel" aria-labelledby="chat-title" hidden>
+            <div class="chat-heading">
+              <div><p class="section-kicker">TANYA MATERI</p><h3 id="chat-title">Ada yang belum jelas?</h3></div>
+              <button id="chat-clear" class="text-button" type="button" hidden>Hapus percakapan</button>
+            </div>
+            <div id="chat-log" class="chat-log" aria-live="polite"></div>
+            <form id="chat-form" class="chat-form">
+              <label class="sr-only" for="chat-input">Pertanyaan tentang materi</label>
+              <textarea id="chat-input" rows="2" maxlength="1000" placeholder="Contoh: Apa bedanya fotosintesis dan respirasi?"></textarea>
+              <button id="chat-send" class="action-button" type="submit">Tanya</button>
+            </form>
+            <p id="chat-message" class="form-message" role="alert" hidden></p>
+          </section>
+          <p class="result-footnote">Dibuat dari materi yang kamu berikan. Periksa kembali hasil AI terhadap materi asli.</p>
         </section>
       </div>
+      <section class="panel stats-panel" aria-labelledby="stats-title">
+        <div class="panel-heading">
+          <div class="heading-group"><span class="step-number">04</span><div><p class="section-kicker">PERKEMBANGANMU</p><h2 id="stats-title">Statistik belajar</h2></div></div>
+        </div>
+        <div id="stats-content" class="stats-content"></div>
+      </section>
       <section class="panel history-panel" aria-labelledby="history-title">
         <div class="panel-heading">
-          <div class="heading-group"><span class="step-number">04</span><div><p class="section-kicker">LANJUTKAN BELAJAR</p><h2 id="history-title">Riwayat belajar</h2></div></div>
+          <div class="heading-group"><span class="step-number">05</span><div><p class="section-kicker">LANJUTKAN BELAJAR</p><h2 id="history-title">Riwayat belajar</h2></div></div>
         </div>
-        <p class="history-note">Maksimal 30 hasil terakhir tersimpan di browser ini, beserta progres latihan. Riwayat bisa hilang jika data browser dihapus.</p>
+        <p class="history-note">Maksimal 30 hasil terakhir tersimpan di browser ini, beserta progres latihan, jadwal ulang kartu, dan percakapan. Riwayat bisa hilang jika data browser dihapus.</p>
         <p id="history-message" class="form-message" role="status" hidden></p>
         <div id="history-list" class="history-list"></div>
       </section>
@@ -96,8 +143,14 @@
 
     <footer class="site-footer"><span>STUDYGEN</span><span>Belajar, satu langkah setiap kali.</span></footer>
   </div>
-  <script src="js/interactive.js"></script>
-  <script src="js/document.js"></script>
-  <script src="js/app.js" data-api-url="local-api/generate.php"></script>
+  <div id="print-area" class="print-area" aria-hidden="true"></div>
+  <script src="js/theme.js?v=2"></script>
+  <script src="js/api.js?v=2" data-api-url="local-api/generate.php"></script>
+  <script src="js/study-core.js?v=2"></script>
+  <script src="js/stats.js?v=2"></script>
+  <script src="js/interactive.js?v=2"></script>
+  <script src="js/document.js?v=2"></script>
+  <script src="js/ocr.js?v=2"></script>
+  <script src="js/app.js?v=2"></script>
 </body>
 </html>
