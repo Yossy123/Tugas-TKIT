@@ -89,33 +89,6 @@ function validateQuestion(item, questionType) {
   return validText(item.answer) ? { kind, question, answer: item.answer.trim(), explanation } : 'Format kuis tidak valid. Silakan coba lagi.';
 }
 
-// Groq sends reset times like "7.66s", "2m59.56s" or "1h2m3s".
-function durationSeconds(value) {
-  if (typeof value !== 'string') return null;
-  const parts = [...value.matchAll(/(\d+(?:\.\d+)?)(ms|h|m|s)/g)];
-  if (!parts.length) return null;
-  const scale = { h: 3600, m: 60, s: 1, ms: 0.001 };
-  return Math.ceil(parts.reduce((total, [, amount, unit]) => total + Number(amount) * scale[unit], 0));
-}
-
-// Requests are a daily quota, tokens a per-minute quota on Groq.
-function readRateLimit(headers) {
-  const number = (name) => {
-    const raw = headers?.get?.(`x-ratelimit-${name}`);
-    const value = raw === null || raw === undefined ? NaN : Number(raw);
-    return Number.isFinite(value) ? value : null;
-  };
-  const bucket = (kind) => {
-    const limit = number(`limit-${kind}`);
-    const remaining = number(`remaining-${kind}`);
-    if (limit === null || remaining === null) return null;
-    return { limit, remaining, resetSeconds: durationSeconds(headers.get(`x-ratelimit-reset-${kind}`)) };
-  };
-  const requests = bucket('requests');
-  const tokens = bucket('tokens');
-  return requests || tokens ? { requests, tokens } : null;
-}
-
 function parseJson(result) {
   try {
     const value = JSON.parse(result.trim().replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/i, '$1'));
@@ -126,8 +99,7 @@ function parseJson(result) {
 module.exports = async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
-  let rateLimit = null;
-  const respond = (status, success, payload) => res.status(status).json({ success, ...payload, ...(rateLimit ? { rateLimit } : {}) });
+  const respond = (status, success, payload) => res.status(status).json({ success, ...payload });
   const fail = (status, error) => respond(status, false, { error });
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -215,7 +187,6 @@ module.exports = async function handler(req, res) {
       body: JSON.stringify({ model: 'openai/gpt-oss-20b', messages, ...extra }),
       signal: AbortSignal.timeout(45000),
     });
-    rateLimit = readRateLimit(upstream.headers);
     if (!upstream.ok) {
       console.error(`StudyGen Groq returned HTTP ${upstream.status}`);
       const [code, error] = upstreamErrors[upstream.status]
