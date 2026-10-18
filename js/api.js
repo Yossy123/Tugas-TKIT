@@ -12,6 +12,7 @@
       }
       let data;
       try { data = await response.json(); } catch { throw new Error('Respons server tidak valid.'); }
+      if (data?.rateLimit) window.dispatchEvent(new CustomEvent('studygen:ratelimit', { detail: data.rateLimit }));
       if (data?.upstreamStatus === 429 && attempt < 2) {
         const seconds = Math.min(120, Math.max(1, Number(data.retryAfter) || 60));
         onWait(seconds);

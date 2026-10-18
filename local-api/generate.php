@@ -11,8 +11,32 @@ require __DIR__ . DIRECTORY_SEPARATOR . 'extract.php';
 
 function respond(bool $success, array $payload, int $status = 200): never {
     http_response_code($status);
+    $rateLimit = $GLOBALS['rateLimit'] ?? null;
+    if ($rateLimit) $payload['rateLimit'] = $rateLimit;
     echo json_encode(array_merge(['success' => $success], $payload), JSON_UNESCAPED_UNICODE);
     exit;
+}
+
+// Groq sends reset times like "7.66s", "2m59.56s" or "1h2m3s".
+function durationSeconds(?string $value): ?int {
+    if ($value === null || !preg_match_all('/(\d+(?:\.\d+)?)(ms|h|m|s)/', $value, $parts, PREG_SET_ORDER)) return null;
+    $scale = ['h' => 3600, 'm' => 60, 's' => 1, 'ms' => 0.001];
+    $total = 0;
+    foreach ($parts as [, $amount, $unit]) $total += (float) $amount * $scale[$unit];
+    return (int) ceil($total);
+}
+
+// Requests are a daily quota, tokens a per-minute quota on Groq.
+function readRateLimit(array $headers): ?array {
+    $bucket = function (string $kind) use ($headers): ?array {
+        $limit = $headers["x-ratelimit-limit-{$kind}"] ?? null;
+        $remaining = $headers["x-ratelimit-remaining-{$kind}"] ?? null;
+        if (!is_numeric($limit) || !is_numeric($remaining)) return null;
+        return ['limit' => (int) $limit, 'remaining' => (int) $remaining, 'resetSeconds' => durationSeconds($headers["x-ratelimit-reset-{$kind}"] ?? null)];
+    };
+    $requests = $bucket('requests');
+    $tokens = $bucket('tokens');
+    return $requests || $tokens ? ['requests' => $requests, 'tokens' => $tokens] : null;
 }
 
 function fail(int $status, string $error): never {
@@ -203,11 +227,18 @@ if (!function_exists('curl_init')) fail(500, 'Gagal menghasilkan materi. Silakan
 $body = json_encode(array_merge(['model' => 'openai/gpt-oss-20b', 'messages' => $messages], $extra), JSON_UNESCAPED_UNICODE);
 $curl = curl_init('https://api.groq.com/openai/v1/chat/completions');
 curl_setopt_array($curl, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $body, CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $apiKey, 'Content-Type: application/json'], CURLOPT_CONNECTTIMEOUT => 10, CURLOPT_TIMEOUT => 45]);
+$upstreamHeaders = [];
+curl_setopt($curl, CURLOPT_HEADERFUNCTION, function ($handle, string $line) use (&$upstreamHeaders): int {
+    $pair = explode(':', $line, 2);
+    if (count($pair) === 2) $upstreamHeaders[strtolower(trim($pair[0]))] = trim($pair[1]);
+    return strlen($line);
+});
 $rawResponse = curl_exec($curl);
 $httpCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
 $curlCode = curl_errno($curl);
 $curlError = curl_error($curl);
 curl_close($curl);
+$rateLimit = readRateLimit($upstreamHeaders);
 if ($rawResponse === false || $curlCode !== 0) {
     error_log("StudyGen Groq connection failed: cURL {$curlCode}: {$curlError}");
     fail(503, 'Server tidak dapat terhubung ke layanan AI. Periksa koneksi internet server, lalu coba lagi.');

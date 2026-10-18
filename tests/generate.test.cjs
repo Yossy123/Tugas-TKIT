@@ -294,3 +294,24 @@ test('URL extraction rejects unsafe targets without any network request', async 
   }
   assert.equal(upstream.mock.callCount(), 0);
 });
+
+test('Groq rate-limit headers are passed to the browser', async (t) => {
+  const headers = new Headers({
+    'x-ratelimit-limit-requests': '1000', 'x-ratelimit-remaining-requests': '987', 'x-ratelimit-reset-requests': '1m26.4s',
+    'x-ratelimit-limit-tokens': '8000', 'x-ratelimit-remaining-tokens': '7500', 'x-ratelimit-reset-tokens': '3.75s',
+  });
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: true, status: 200, headers, json: async () => ({ choices: [{ message: { content: 'Ringkasan.' } }] }) }));
+  const response = await request();
+  assert.deepEqual(response.body.rateLimit, {
+    requests: { limit: 1000, remaining: 987, resetSeconds: 87 },
+    tokens: { limit: 8000, remaining: 7500, resetSeconds: 4 },
+  });
+
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: false, status: 429, headers, json: async () => ({}) }));
+  assert.equal((await request()).body.rateLimit.requests.remaining, 987);
+});
+
+test('responses without rate-limit headers omit rateLimit', async (t) => {
+  mockGroq(t, 'Ringkasan.');
+  assert.equal('rateLimit' in (await request()).body, false);
+});
