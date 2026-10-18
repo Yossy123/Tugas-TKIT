@@ -203,6 +203,11 @@ if (!function_exists('curl_init')) fail(500, 'Gagal menghasilkan materi. Silakan
 $body = json_encode(array_merge(['model' => 'openai/gpt-oss-20b', 'messages' => $messages], $extra), JSON_UNESCAPED_UNICODE);
 $curl = curl_init('https://api.groq.com/openai/v1/chat/completions');
 curl_setopt_array($curl, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $body, CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $apiKey, 'Content-Type: application/json'], CURLOPT_CONNECTTIMEOUT => 10, CURLOPT_TIMEOUT => 45]);
+$retryAfterHeader = null;
+curl_setopt($curl, CURLOPT_HEADERFUNCTION, function ($handle, string $line) use (&$retryAfterHeader): int {
+    if (stripos($line, 'retry-after:') === 0) $retryAfterHeader = trim(substr($line, 12));
+    return strlen($line);
+});
 $rawResponse = curl_exec($curl);
 $httpCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
 $curlCode = curl_errno($curl);
@@ -217,7 +222,10 @@ if ($httpCode < 200 || $httpCode >= 300) {
     $message = $httpCode === 429
         ? 'Layanan AI sedang sibuk. Silakan coba lagi beberapa saat lagi.'
         : 'Layanan AI gagal memproses permintaan. Silakan coba lagi.';
-    respond(false, ['error' => $message, 'upstreamStatus' => $httpCode], $httpCode === 429 ? 503 : 502);
+    $payload = ['error' => $message, 'upstreamStatus' => $httpCode];
+    // Wait as long as Groq asks (often a few seconds for the per-minute token limit).
+    if ($httpCode === 429) $payload['retryAfter'] = min(120, max(1, (int) ceil(is_numeric($retryAfterHeader) ? (float) $retryAfterHeader : 60)));
+    respond(false, $payload, $httpCode === 429 ? 503 : 502);
 }
 $groqResponse = json_decode($rawResponse, true);
 $result = $groqResponse['choices'][0]['message']['content'] ?? null;
